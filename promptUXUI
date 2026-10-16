@@ -1,0 +1,140 @@
+# Prompt Lovable UX/UI
+Build a fraud investigation app for healthcare claims called
+"CAS Fraud Detector". This app helps a fraud investigator at a
+health insurance company triage, investigate, and resolve fraud
+alerts efficiently.
+
+Connect to Supabase. The database has three tables:
+
+1. "claims" — 50,000 healthcare claims with columns: CLM_ID (text, primary key),
+   AT_PHYSN_NPI (text), specialty (text), HCPCS_CD (text), amount_billed (numeric),
+   CLM_PMT_AMT (numeric), pm_score (numeric), structural_score (numeric),
+   semantic_score (numeric), temporal_score (numeric), xgb_score (numeric),
+   if_score (numeric), cas_score (numeric), oar_alert (integer 0 or 1),
+   oar_confidence (numeric), n_signals (integer 0-3), is_fraud (integer),
+   fraud_type (text), fraud_narrative (text), PRVDR_STATE_CD (text),
+   service_hour (integer), submission_lag (integer), flow_length (integer)
+
+2. "providers" — 800 providers with columns: AT_PHYSN_NPI (text, primary key),
+   specialty (text), n_claims (integer), fraud_rate (numeric), cas_score (numeric),
+   avg_pm_score (numeric), avg_amount (numeric), n_alerts (integer),
+   PRVDR_STATE_CD (text)
+
+3. "alerts" — fraud alerts with columns: id (uuid, primary key),
+   CLM_ID (text), AT_PHYSN_NPI (text), status (text: pending/investigating/
+   confirmed/dismissed), n_signals (integer), oar_confidence (numeric),
+   fraud_narrative (text), created_at (timestamptz)
+
+The app has 3 pages with a clean sidebar navigation:
+
+PAGE 1 — "Alert Queue" (main page, the investigator's daily starting point)
+This is a work queue, not a dashboard. The investigator opens this every
+morning to see what needs attention.
+
+Top section: 4 simple stat cards showing:
+  - Pending alerts (count of alerts where status = 'pending')
+  - Under investigation (count where status = 'investigating')
+  - Confirmed fraud this month (count where status = 'confirmed')
+  - Total amount at risk (sum of amount_billed from claims joined with
+    alerts where status = 'pending')
+
+Below the stats: a filterable, sortable table of alerts. Columns:
+  Claim ID, Provider, Specialty, Amount, Signals (show as 1/3, 2/3, 3/3
+  with colored dots — green for 1, amber for 2, red for 3), Confidence
+  (percentage), Status (badge: pending=gray, investigating=blue,
+  confirmed=red, dismissed=muted), and a "Review" button.
+
+The table should:
+  - Default sort by n_signals descending, then oar_confidence descending
+    (highest priority first)
+  - Have filter tabs at the top: All, Pending, Investigating, Confirmed,
+    Dismissed
+  - Show clear empty states if a filter has no results
+  - Paginate at 20 rows per page
+
+When the user clicks "Review" on any row, navigate to that claim's
+detail page.
+
+PAGE 2 — "Claim Detail" (the investigation workspace)
+This is where the investigator actually works a case. Show:
+
+Header: Claim ID, provider NPI, specialty, current status badge, and
+the amount billed in large text.
+
+Section "Why was this flagged?" — This is the most important section.
+Show the fraud_narrative text in a prominent card with a light amber
+background. Below it, show three horizontal progress bars labeled
+"Process conformance", "Pattern analysis", and "Anomaly detection"
+representing pm_score, xgb_score, and if_score (0 to 1 scale, colored
+green under 0.3, amber 0.3-0.6, red above 0.6). Next to them show the
+signal count as "X of 3 signals active".
+
+Section "Claim details" — A clean two-column grid showing:
+  Left: CPT code, Diagnosis code, Service hour, Submission lag (days),
+  Process steps (flow_length)
+  Right: Amount billed, Amount paid, Provider state, Provider specialty
+
+Section "Provider context" — A small card showing the provider's
+overall stats: total claims, alert rate, behavioral score
+(cas_score as a colored badge: low if under 0.4, medium 0.4-0.7,
+high above 0.7), and average billed amount.
+
+Section "Actions" — Four clear buttons:
+  - "Start investigation" (changes status to investigating, shows
+    confirmation toast "Investigation started")
+  - "Confirm as fraud" (changes status to confirmed, shows toast
+    "Marked as confirmed fraud")
+  - "Dismiss" (changes status to dismissed, shows toast "Alert dismissed")
+  - "Back to queue" (returns to Alert Queue)
+
+When status changes, update the alerts table in Supabase and show a
+success toast. The button for the current status should be disabled
+(e.g., if status is already "investigating", that button is grayed out).
+
+PAGE 3 — "Provider Overview"
+A searchable list of providers. Show a card for each with: NPI,
+specialty, state, total claims, number of alerts, and a behavioral
+score indicator (cas_score shown as Low/Medium/High with color).
+Click a provider to see their alert history (list of their claims
+that have oar_alert = 1, with status badges).
+
+DESIGN:
+- Use shadcn/ui components and Tailwind CSS
+- Light theme (white background, not dark) — this is a professional
+  work tool used 8 hours a day, readability matters
+- Primary color: navy (#0C2340) for headers and sidebar
+- Accent: teal (#0F6E56) for positive actions and confirmed states
+- Warning: amber (#854F0B) for the "flagged" narrative section
+- Alert: coral (#993C1D) for high-severity indicators
+- Clean typography, generous spacing, no visual clutter
+- Every action should have visible feedback (toasts, state changes)
+- Sidebar should show the current page highlighted
+- Mobile-responsive is nice but desktop-first is fine
+
+On the Alert Queue page, add a small summary line above the table
+that says "Showing X alerts" with the current filter count. Also
+add a search input that filters the table by Claim ID or Provider NPI.
+
+On the Claim Detail page, add a "Last updated" timestamp below the
+status badge showing when the status was last changed. Also make the
+"Why was this flagged?" section the first thing visible without
+scrolling.
+
+Make sure the sidebar shows a small counter badge next to "Alert Queue"
+with the number of pending alerts.
+
+Add a small "About" link in the sidebar footer (not as a main nav item).
+It should open a simple page explaining:
+
+"CAS Fraud Detector helps insurance fraud investigators prioritize
+and resolve healthcare claim alerts. The system analyzes claims using
+three independent methods — process conformance checking, pattern
+recognition, and anomaly detection — and combines their signals to
+rank alerts by confidence level.
+
+Claims where all three methods agree are flagged with the highest
+priority. Each alert includes a plain-language explanation of why
+it was flagged, so investigators can quickly decide whether to
+pursue or dismiss a case.
+
+Built for SheBuilds Season 4."
